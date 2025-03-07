@@ -406,13 +406,110 @@ public class theRobot extends JFrame {
     //       To do this, you should update the 2D-array "probs"
     // Note: sonars is a bit string with four characters, specifying the sonar reading in the direction of North, South, East, and West
     //       For example, the sonar string 1001, specifies that the sonars found a wall in the North and West directions, but not in the South and East directions
-    void updateProbabilities(int action, String sonars) {
-        // your code
+    void updateProbabilities(int action, String sonars) { //BayesFilter Algorithm
+        //for each state in states
+            //what is out belief that we are in state?
+            //bel_bar(s) = sum_for_eachPlaceYouCanGoFromHere [( transition_model_P ) * (bel_youre_in_that_state)]
 
+            //Now take into account actual sensor readings into belief
+            //bel(s) = (sensor_model_P) * (bel_bar(s))
+
+            //add bel(s) to bel(Xt)
+        //end for
+        //normalize (bel(Xt))
+        //return bel(Xt)
         myMaps.updateProbs(probs); // call this function after updating your probabilities so that the
                                    //  new probabilities will show up in the probability map on the GUI
     }
+    double sensorModel(int[] curr_state, String sonars){
+        int[] realSonars = getRealSonars(curr_state);
+        int diff = numDiffSonars(realSonars, convertSonarToArray(sonars));
+        return diff * (1 - sensorAccuracy) + (4 - diff) * sensorAccuracy;
+    }
 
+    int numDiffSonars(int[] realSonars, int[] readSonars) {
+        int count = 0;
+        for(int i: realSonars){
+            if(i == readSonars[i]){
+                count++;
+            }
+        }
+        return count;
+    }
+
+    int[] convertSonarToArray(String sonars){
+        int[] newSonars = new int[4];
+        for (int i = 0; i < sonars.length(); i++) {
+            newSonars[i] = sonars.charAt(i) - '0';  // Convert '0'/'1' to int
+        }
+        return newSonars;
+    }
+
+    int[] getRealSonars(int[] currState) {
+        //QUESTION: What happens when the robot sees a stairwell? Or the goal? Is it always just wall or not wall?
+        int[] sonars = new int[4]; //how do you get the real sonar readings from the world? Can you pull that from the world info?
+        sonars[0] = mundo.grid[currState[0]][currState[1] + 1]; //up
+        sonars[1] = mundo.grid[currState[0]][currState[1] - 1]; //down
+        sonars[2] = mundo.grid[currState[0] - 1][currState[1]]; //left
+        sonars[3] = mundo.grid[currState[0] + 1][currState[1]]; //right
+        return sonars;
+    }
+
+    double transitionModel(int action, int[] curr_state, int[] future_state) {
+        //if we are in a state and take an action, what is the probability of being in a given state
+//        double P = probs[curr_state[0]][curr_state[1]]; //start with original probability
+        if(!touch(curr_state, future_state)){ //Maybe I shouldn't send any future states that are not near in the vicinity of the curr_state
+            return 0; //returns a probability of 0 if there's no way the robot could have gotten there
+            //QUESTION: Can the robot jump to a random state on the board or does it have to jump to a neighboring one?
+        }
+        else{
+            if(correctMove(action, curr_state, future_state)){ //if move resulted in expected (curr_state + action = future_state)
+                return moveProb;
+            }
+            return (1 - moveProb) / 4; //if the future move was not expected
+        }
+    }
+
+    boolean correctMove(int action, int[] currState, int[] futureState) {
+        //how do you translate the action into a new state?
+        int xpos = currState[0], ypos = currState[1];
+
+        switch (action) {
+            case NORTH: // up
+                ypos --;
+                break;
+            case SOUTH:
+                ypos ++;
+                break;
+            case WEST:
+                xpos --;
+                break;
+            case EAST: //
+                xpos ++;
+                break;
+            case 4: // stay
+                break;
+        }
+        if(xpos == futureState[0] && ypos == futureState[1]){ //if the future state matches the updates state
+            return true;
+        }
+        return false;
+    }
+
+    boolean touch(int[] currState, int[] futureState){ //if it's up/down/left/right or no where
+        //Check that this never extends out of the bounding conditions
+        int up = currState[1] + 1;
+        int down = currState[1] - 1;
+        int left = currState[0] - 1;
+        int right = currState[0] + 1;
+        if(futureState[0] == currState[0]){
+            return futureState[1] == up || futureState[1] == down || futureState[1] == currState[1]; //up/down/stayed
+        }
+        else if(futureState[1] == currState[1]){
+            return futureState[0] == right || futureState[0] == left; //left/right
+        }
+        return false;
+    }
 
 
     // This is the function you'd need to write to make the robot move using your AI;
@@ -436,7 +533,7 @@ public class theRobot extends JFrame {
                     action = automaticAction(); // TODO: get the action selected by your AI;
                                                 // you'll need to write this function for part III
                 
-                sout.println(action); // send the action to the Server
+                sout.println(action); // send the action to the Server, robot actually acts
                 
                 // get sonar readings after the robot moves
                 String sonars = sin.readLine();
